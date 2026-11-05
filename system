@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# Ambil nama service dari folder saat ini (bisa kamu ubah manual juga)
+SERVICE_NAME=$(basename "$(pwd)")
+REPO_DIR="$(pwd)"
+VENV_DIR="$REPO_DIR/venv"
+ENV_FILE="$REPO_DIR/.env"
+
+echo "Menyiapkan virtual environment untuk $SERVICE_NAME..."
+
+if [ ! -d "$VENV_DIR" ]; then
+    python3.12 -O -m venv "$VENV_DIR"
+    echo "Virtual environment dibuat."
+else
+    echo "Virtual environment sudah ada."
+fi
+
+# Aktifkan virtualenv dan install dependencies
+source "$VENV_DIR/bin/activate"
+pip install --upgrade pip
+pip install -r "$REPO_DIR/requirements.txt"
+
+echo "Membuat systemd service untuk $SERVICE_NAME..."
+
+# Cek file environment .env
+if [ -f "$ENV_FILE" ]; then
+    ENV_LINE="EnvironmentFile=$ENV_FILE"
+    echo "File .env ditemukan, akan dimuat oleh systemd."
+else
+    ENV_LINE=""
+    echo "File .env tidak ditemukan, bagian EnvironmentFile dilewati."
+fi
+
+# Tentukan user yang menjalankan service (jangan root supaya aman, bisa ubah sesuai kebutuhan)
+SERVICE_USER=${USER:-$(whoami)}
+
+sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null <<EOF
+[Unit]
+Description=ayes $SERVICE_NAME
+After=network.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+WorkingDirectory=$REPO_DIR
+$ENV_LINE
+ExecStart=/bin/bash -c 'source $VENV_DIR/bin/activate && bash start.sh'
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Nice=-10
+CPUWeight=120
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "Reload systemd dan mengaktifkan service $SERVICE_NAME..."
+
+sudo systemctl daemon-reload
+sudo systemctl enable $SERVICE_NAME
+sudo systemctl restart $SERVICE_NAME
+
+echo "Service '$SERVICE_NAME' berhasil dibuat dan dijalankan."
+sudo systemctl status $SERVICE_NAME --no-pager

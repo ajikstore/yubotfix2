@@ -1,0 +1,63 @@
+import asyncio
+
+from config import DICT_BUTTON
+from kelra import bot
+from kelra.database import state
+from kelra.helpers import CMD, ButtonUtils, Emoji
+
+__MODULES__ = "Button"
+__HELP__ = """<blockquote>Command Help **Button** </blockquote>
+
+<blockquote expandable>    <u>**Make button from text**</u>
+    <u>**You can create buttons from the text, please read markdown format**</u>
+        `{0}button` (reply text)</blockquote>
+ 
+<b>   {1}</b>
+"""
+
+__CATEGORY__ = "ᴄʜᴀᴛ <emoji id=5215538577496090960>💬</emoji>"
+
+@CMD.UBOT("buttonch")
+async def _(client, message):
+    proses = await message.reply_text("Processing...")
+    rep = message.reply_to_message
+    if not rep and len(message.command) < 2:
+        return await proses.edit("Reply to message!!")
+    state.set(client.me.id, "edit_reply_markup", rep.text)
+    link = message.text.split(None, 1)[1]
+    await client.send_message(bot.me.username, f"/button {link}")
+    return await proses.edit("Done")
+
+
+@CMD.UBOT("button")
+async def _(client, message):
+    em = Emoji(client)
+    await em.get()
+    reply = message.reply_to_message
+    if not reply:
+        return await message.reply(f"<blockquote>{em.gagal}<b>Please reply to message with button format!</b></blockquote>")
+    teks = client.get_text(message)
+    DICT_BUTTON[client.me.id] = client.get_arg(message)
+    chat_id = message.chat.id if len(message.command) < 2 else message.text.split()[1]
+    if reply.media:
+        copy = await reply.copy(bot.me.username)
+        sent = await client.send_message(bot.me.username, "/id button_media", reply_to_message_id=copy.id)
+        await asyncio.sleep(1)
+        await sent.delete()
+        await copy.delete()
+        state.set(client.me.id, "button", DICT_BUTTON[client.me.id])
+    else:
+        state.set(client.me.id, "button", DICT_BUTTON[client.me.id])
+    text, keyboard = ButtonUtils.parse_msg_buttons(teks)
+    try:
+        if keyboard:
+            try:
+                inline = await ButtonUtils.send_inline_bot_result(message, chat_id, bot.me.username, f"make_button {client.me.id}")
+                if inline:
+                    return await message.delete()
+            except Exception as er:
+                return await message.reply(f"<blockquote>{em.gagal}<b>ERROR: {str(er)}</b></blockquote>")
+        else:
+            return await message.reply(f"<blockquote>{em.gagal}<b>Please reply to message with button format!</b></blockquote>")
+    except IndexError:
+        return await message.reply(f"<blockquote>{em.gagal}<b>Please reply to message with button format!</b></blockquote>")

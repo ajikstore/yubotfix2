@@ -1,0 +1,260 @@
+import asyncio
+import random
+
+from pyrogram.enums import ChatMembersFilter
+from pyrogram.errors import FloodWait
+
+from kelra.helpers import CMD, Emoji, task, ButtonUtils
+from .admins import admin_check
+
+
+# ======================
+# RANDOM EMOJI
+# ======================
+def random_emoji():
+    emojis = (
+        "🍦 🎈 🎸 🌼 🌳 🚀 🎩 📷 💡 🏄‍♂️ 🎹 🚲 🍕 🌟 🎨 📚 🚁 🎮 🍔 🍉 "
+        "🎉 🎵 🌸 🌈 🏝️ 🌞 🎢 🚗 🎭 🍩 🎲 📱 🏖️ 🛸 🧩 🚢 🎠 🏰 🎯 🥳 "
+        "🎰 🛒 🧸 🛺 🧊 🛷 🦩 🎡 🎣 🏹 🧁 🥨 🎻 🎺 🥁 🛹 🔥 💥 💦 🤡"
+    ).split()
+    return random.choice(emojis)
+
+
+# ======================
+# TAGALL / ALL (INLINE)
+# ======================
+@CMD.UBOT("all|tagall")
+async def _(client, message):
+    em = Emoji(client)
+    await em.get()
+    proses_ = await em.get_costum_text()
+
+    proses = await message.reply(
+        f"<blockquote>{em.proses}**{proses_[4]}**</blockquote>"
+    )
+
+    if not await admin_check(message, client.me.id):
+        return await proses.edit(
+            f"<blockquote>{em.gagal}**You are not an admin in this group!**</blockquote>"
+        )
+
+    task_id = task.start_task()
+    inline_deleted = False
+    replied = message.reply_to_message
+    prefix = client.get_prefix(client.me.id)
+
+    if len(message.command) < 2 and not replied:
+        task.end_task(task_id)
+        return await proses.edit(
+            f"<blockquote>{em.gagal}**Please reply to text or give text!**</blockquote>"
+        )
+
+    # ======================
+    # INLINE CANCEL
+    # ======================
+    try:
+        inline = await ButtonUtils.send_inline_bot_result(
+            message,
+            message.chat.id,
+            bot.me.username,
+            f"inline_cancel {task_id} {id(message)}",
+        )
+        if inline:
+            await proses.delete()
+            inline_deleted = True
+    except Exception:
+        await proses.edit(
+            f"<blockquote>{em.proses}<i>"
+            f"Task mention running #<code>{task_id}</code>. "
+            f"Type <code>{prefix[0]}cancel {task_id}</code> to cancel!"
+            f"</i></blockquote>"
+        )
+
+    async def tag_members():
+        usernum = 0
+        usertxt = ""
+
+        try:
+            async for m in client.get_chat_members(message.chat.id):
+                if not task.is_active(task_id):
+                    break
+
+                if m.user.is_deleted or m.user.is_bot:
+                    continue
+
+                usernum += 1
+                usertxt += f"[{random_emoji()}](tg://user?id={m.user.id}) "
+
+                if usernum == 7:
+                    if replied:
+                        await replied.reply_text(usertxt, disable_web_page_preview=True)
+                    else:
+                        text = message.text.split(maxsplit=1)[1]
+                        await client.send_message(
+                            message.chat.id,
+                            f"{text}\n{usertxt}",
+                            disable_web_page_preview=True,
+                        )
+
+                    await asyncio.sleep(2)
+                    usernum = 0
+                    usertxt = ""
+
+            if usernum:
+                if replied:
+                    await replied.reply_text(usertxt, disable_web_page_preview=True)
+                else:
+                    text = message.text.split(maxsplit=1)[1]
+                    await client.send_message(
+                        message.chat.id,
+                        f"{text}\n{usertxt}",
+                        disable_web_page_preview=True,
+                    )
+
+        except FloodWait as e:
+            await asyncio.sleep(e.value)
+        finally:
+            task.end_task(task_id)
+
+    result_message = message if inline_deleted else proses
+
+    try:
+        await asyncio.wait_for(tag_members(), timeout=300)
+    except asyncio.TimeoutError:
+        task.end_task(task_id)
+        return await result_message.edit(
+            f"<blockquote>{em.gagal}**Task #{task_id} timed out!**</blockquote>"
+        )
+
+    try:
+        await result_message.delete()
+    except Exception:
+        pass
+
+
+# ======================
+# TAG ADMINS (INLINE)
+# ======================
+@CMD.UBOT_REGEX(r"^(@admins)")
+async def _(client, message):
+    em = Emoji(client)
+    await em.get()
+    proses_ = await em.get_costum_text()
+
+    proses = await message.reply(
+        f"<blockquote>{em.proses}**{proses_[4]}**</blockquote>"
+    )
+
+    task_id = task.start_task()
+    inline_deleted = False
+    replied = message.reply_to_message
+    prefix = client.get_prefix(client.me.id)
+
+    if not replied and len(message.text.split()) == 1:
+        task.end_task(task_id)
+        return await proses.edit(
+            f"<blockquote>{em.gagal}**Please reply to text or give text!**</blockquote>"
+        )
+
+    try:
+        inline = await ButtonUtils.send_inline_bot_result(
+            message,
+            message.chat.id,
+            bot.me.username,
+            f"inline_cancel {task_id} {id(message)}",
+        )
+        if inline:
+            await proses.delete()
+            inline_deleted = True
+    except Exception:
+        await proses.edit(
+            f"<blockquote>{em.proses}<i>"
+            f"Task admin mention #<code>{task_id}</code>. "
+            f"Type <code>{prefix[0]}cancel {task_id}</code> to cancel!"
+            f"</i></blockquote>"
+        )
+
+    async def tag_admins():
+        usernum = 0
+        usertxt = ""
+
+        try:
+            async for m in client.get_chat_members(
+                message.chat.id, filter=ChatMembersFilter.ADMINISTRATORS
+            ):
+                if not task.is_active(task_id):
+                    break
+
+                if m.user.is_deleted or m.user.is_bot:
+                    continue
+
+                usernum += 1
+                usertxt += f"[{random_emoji()}](tg://user?id={m.user.id}) "
+
+                if usernum == 7:
+                    if replied:
+                        await replied.reply_text(usertxt, disable_web_page_preview=True)
+                    else:
+                        text = message.text.split(maxsplit=1)[1]
+                        await client.send_message(
+                            message.chat.id,
+                            f"{text}\n{usertxt}",
+                            disable_web_page_preview=True,
+                        )
+
+                    await asyncio.sleep(2)
+                    usernum = 0
+                    usertxt = ""
+
+            if usernum:
+                if replied:
+                    await replied.reply_text(usertxt, disable_web_page_preview=True)
+                else:
+                    text = message.text.split(maxsplit=1)[1]
+                    await client.send_message(
+                        message.chat.id,
+                        f"{text}\n{usertxt}",
+                        disable_web_page_preview=True,
+                    )
+
+        except FloodWait as e:
+            await asyncio.sleep(e.value)
+        finally:
+            task.end_task(task_id)
+
+    result_message = message if inline_deleted else proses
+
+    try:
+        await asyncio.wait_for(tag_admins(), timeout=300)
+    except asyncio.TimeoutError:
+        task.end_task(task_id)
+        return await result_message.edit(
+            f"<blockquote>{em.gagal}**Task #{task_id} timed out!**</blockquote>"
+        )
+
+    try:
+        await result_message.delete()
+    except Exception:
+        pass
+
+
+# ======================
+# HELP
+# ======================
+__MODULES__ = "Tagall"
+__HELP__ = """<blockquote>Command Help <b>Tagall</b></blockquote>
+
+<blockquote expandable>
+<u><b>Mention all members</b></u>
+<code>{0}tagall</code> (text / reply)
+
+<u><b>Mention admins only</b></u>
+<code>@admins</code> (text / reply)
+
+<u><b>Stop mention</b></u>
+<code>{0}cancel</code> (task_id)
+or via inline cancel
+</blockquote>
+
+<b>{1}</b>
+"""

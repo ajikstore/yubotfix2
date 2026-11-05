@@ -1,0 +1,31 @@
+# --- Python & Virtual Environment ---
+venv/
+.venv/
+env/
+__pycache__/
+*/__pycache__/*
+*.pyc
+*.pyo
+*.pyd
+
+# --- Database & Storage / Cache ---
+*.db
+*.sqlite
+*.sqlite3
+storage/cache/
+storage/cookies/
+downloads/
+
+# --- Session & Credentials ---
+.env
+*.session
+*.session-journal
+
+# --- Media & Documents (Opsional, hapus jika memang ingin di-push) ---
+*.jpg
+*.zip
+*.txt
+
+# --- System & OS Junk ---
+.DS_Store
+Thumbs.db

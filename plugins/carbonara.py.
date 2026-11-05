@@ -1,0 +1,82 @@
+import os
+import random
+import aiohttp
+from io import BytesIO
+
+from kelra import bot
+from kelra.helpers import CMD, Emoji, Message, Quotly
+
+__MODULES__ = "Carbon"
+__HELP__ = """<blockquote>Command Help **Carbon**</blockquote>
+
+<blockquote>        <u>**Make carbonara**</u>
+    <u>**You can generate carbonara from text**</u>
+        `{0}carbon` (reply text)</blockquote>
+    
+<b>   {1}</b>
+"""
+
+async def make_carbon(code, background_color, language, theme):
+    api_url = "https://carbonara.vercel.app/api/cook"
+    payload = {
+        "code": code,
+        "backgroundColor": background_color,
+        "theme": theme,
+        "language": language,
+        "exportSize": "2x",
+        "dropShadow": True
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(api_url, json=payload) as resp:
+            if resp.status == 200:
+                return BytesIO(await resp.read())
+            else:
+                return None
+
+@CMD.UBOT("carbon|carbonara")
+async def _(client, message):
+    em = Emoji(client)
+    await em.get()
+
+    if not message.reply_to_message:
+        return await message.reply(f"<blockquote>{em.gagal}**Please reply to text or document!**</blockquote>")
+
+    content, content_type = await Quotly.get_message_content(message.reply_to_message)
+    if not content:
+        content = message.reply_to_message.text or message.reply_to_message.caption
+        
+    if not content:
+        return await message.reply(f"<blockquote>{em.gagal}**Unable to extract content from message!**</blockquote>")
+
+    proses_ = await em.get_costum_text()
+    process_msg = await message.reply(f"<blockquote>{em.proses}**{proses_[4]}**</blockquote>")
+
+    try:
+        args = message.command[1:] if len(message.command) > 1 else []
+
+        list_warna = ["#151718", "#E14337", "#007AFF", "#4CD964", "#FF9500", "#5856D6", "#FF2D55"]
+        list_tema = ["monokai", "material", "panda", "one-light", "one-dark", "vscode"]
+
+        bg_color = args[0] if len(args) >= 1 else random.choice(list_warna)
+        theme = args[1] if len(args) >= 2 else random.choice(list_tema)
+        language = args[2] if len(args) >= 3 else "python"
+
+        carbon_image = await make_carbon(content, bg_color, language, theme)
+
+        if not carbon_image:
+            return await message.reply(f"<blockquote>{em.gagal}**API Carbon sedang sibuk, coba lagi nanti!**</blockquote>")
+
+        carbon_image.seek(0)
+        carbon_image.name = "carbon.png"
+
+        await message.reply_photo(
+            photo=carbon_image,
+            caption=f"<blockquote>{em.sukses}**Generate by {bot.me.mention}**</blockquote>",
+            reply_to_message_id=Message.ReplyCheck(message),
+        )
+
+    except Exception as e:
+        await message.reply(f"<blockquote>{em.gagal}**ERROR**: {str(e)}</blockquote>")
+
+    finally:
+        await process_msg.delete()
